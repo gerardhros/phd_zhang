@@ -1,0 +1,31 @@
+#Metaanalysis
+library(readx7)
+x7 <- read_excel("x7.xlsx", col_types = c("numeric", 
+                                          "numeric", "numeric"))
+View(x2)
+library(pacman)
+pacman::p_load(meta,metafor)
+meta<- X11
+meta <- X11[1:36,]
+#xlsx
+head(meta)
+#Heterogeneity test
+metamod <- rma(yi=effectsize2,data=meta,sei = vi,method = "DL")
+metamod
+#meta analysis
+m <- metagen(TE=meta$effectsize2,seTE=meta$vi,sm="yi",backtransf = TRUE)
+m
+
+#Publication bias test
+funnel(m,comb.fixed = FALSE)
+metabias(m,method.bias="linreg",plotit = T,k.min=5)
+
+
+#Subgroup analysis
+meta<-X11
+meta <-X11[1:36,]
+m1 <- metagen(TE=meta$effectsize2,seTE=meta$vi,sm="yi",backtransf = TRUE,subgroup =meta$`code`)
+m1
+
+#fail-safe number
+fsn(effectsize2,vi, data=meta) 
