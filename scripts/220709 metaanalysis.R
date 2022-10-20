@@ -23,9 +23,11 @@ cols.rem <- c('paper_title','paper_author','paper_year','paper_journal')
 d1[,c(cols.rem) := NULL]
 
 # merge the spatial coveriates
-d2 <- merge(d1,s1,by= 'rank')
+d2 <- merge(d1,s1,by= 'rank',all.x = TRUE)
 
-# do checks on data, transform where needed, and standardize
+# --- data checks ---- 
+
+  # do checks on data, transform where needed, and standardize
 
   # soil texture classes
   d2[soil_texture == 3 | soil_sand > 65, mv_soiltexture :="sand"]
@@ -120,30 +122,52 @@ d2 <- merge(d1,s1,by= 'rank')
   d2[,mv_rate_byproduct := scale(log(bp_rate3))]
   d2[,mv_rate_combi := scale(log(combination_rate))]
   
-    
   # add climate zone
   d2[,mv_climzone := GEnS]
   
-  # select onlyt relevant columns for doing meta-regression
-  cols.sel <- colnames(d2)[grepl('^ma_|^mv_|^id_liter',colnames(d2))]
   
+# ---- ma for yield ----
+
+  # select only relevant columns for doing meta-regression
+  cols.sel <- colnames(d2)[grepl('^ma_|^mv_|^id_liter|n_rep',colnames(d2))]
+  
+  # subset the data.table
   d3 <- d2[,mget(cols.sel)]
   
-# make a first metaregression for yield
-
   # subset the database for only the yield
-  d2.yield <- d2[!is.na(ma_yield_lnrr)]
+  d3.yield <- d3[!is.na(ma_yield_lnrr)]
   
   # calculate effect size yield
-  d2.rr <- escalc(measure = "ROM", data = d2.yield, 
-                  m1i = ma_yield_mean_t, sd1i = ma_yield_sd_t, n1i = n_rep,
-                  m2i = ma_yield_mean_c, sd2i = ma_yield_sd_c, n2i = n_rep )
+  d3.yield.rr <- escalc(measure = "ROM", data = d3.yield, 
+                        m1i = ma_yield_mean_t, sd1i = ma_yield_sd_t, n1i = n_rep,
+                        m2i = ma_yield_mean_c, sd2i = ma_yield_sd_c, n2i = n_rep )
   
   # make a general model without moderators
-  m1 <- rma.mv(yi = yi,V = vi,data = d2.rr,
-               random = list(~ 1|id_study), 
+  m1 <- rma.mv(yi = yi,V = vi,data = d3.yield.rr,
+               random = list(~ 1|id_literature), 
                method="REML",sparse = TRUE)
 
   # transform data for moderator values and
+  m1 <- rma.mv(yi = yi,V = vi,data = d3.yield.rr,
+               mods = ~ mv_type-1,
+               random = list(~ 1|id_literature), 
+               method="REML",sparse = TRUE) 
+  
+  m1 <- rma.mv(yi = yi,V = vi,data = d3.yield.rr,
+               mods = ~ mv_sp_phc-1,
+               random = list(~ 1|id_literature), 
+               method="REML",sparse = TRUE) 
   
   
+  m1c <- (exp(coefficients(m1))-1) * 100
+  m1p <- c(4.5,4.75,5.25,5.75,6.25,7,3.5)
+require(ggplot2)
+  ggplot(data = data.frame(m1c,m1p),aes(x=m1p,y=m1c)) + geom_point(size=6) + theme_bw() +
+    xlim(3,8) + ylab('effect on yield (%)') + xlab('initial pH (mean of class)')
+  
+summary(m1)  
+
+contr <- 5
+treat <- 12.5
+lnRR <- log(treat/contr)
+
